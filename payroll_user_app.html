@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payroll — Employee Dashboard</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13121c;
+    --surface-hover: #1a1926;
+    --border: #1e1d2b;
+    --text-primary: #f0f0f5;
+    --text-secondary: #9ca3af;
+    --text-tertiary: #6b7280;
+    --text-quaternary: #4b5563;
+    --accent: #8b5cf6;
+    --accent-hover: #7c3aed;
+    --accent-glow: rgba(139,92,246,0.15);
+    --positive: #22c55e;
+    --danger: #ef4444;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
+  .app { max-width: 480px; margin: 0 auto; padding: 20px; }
+  .hidden { display: none !important; }
+  .screen { animation: fadeIn 0.3s ease-out; }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(10px);} to { opacity:1; transform: translateY(0);} }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: rgba(139,92,246,0.25); }
+
+  .btn {
+    padding: 12px 20px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-primary);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 15px;
+  }
+  .btn:hover { background: var(--surface-hover); border-color: var(--accent); }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+  .btn-primary:hover { background: var(--accent-hover); box-shadow: 0 0 30px rgba(139,92,246,0.25); }
+  .btn-danger { color: var(--danger); border-color: rgba(239,68,68,0.4); }
+  .btn-danger:hover { background: rgba(239,68,68,0.1); border-color: var(--danger); }
+  .btn-link { background: transparent; border: none; color: var(--text-tertiary); font-size: 13px; padding: 6px; text-decoration: underline; }
+  .btn-link:hover { color: var(--accent); }
+
+  .input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 16px;
+    outline: none;
+    transition: all 0.2s;
+  }
+  .input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+  .input-error { border-color: var(--danger) !important; }
+  .error-msg { color: var(--danger); font-size: 13px; margin-top: 6px; min-height: 18px; }
+
+  .balance-wrap { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .balance { font-size: 42px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 6px 0; word-break: break-all; line-height: 1.1; color: var(--text-primary); }
+  .balance.sm { font-size: 34px; }
+  .balance.xs { font-size: 28px; }
+  .live-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--positive);
+    background: rgba(34,197,94,0.1);
+    border: 1px solid rgba(34,197,94,0.2);
+    padding: 4px 10px;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .live-dot { width: 6px; height: 6px; background: var(--positive); border-radius: 50%; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .label { font-size: 12px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+  .rate-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px;
+    border-radius: var(--radius-md);
+    background: rgba(139,92,246,0.06);
+    border: 1px solid rgba(139,92,246,0.15);
+  }
+  .rate-value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--accent); }
+
+  .tx-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .tx-row:last-child { border-bottom: none; }
+  .tx-amount { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tx-amount.positive { color: var(--positive); }
+  .tx-amount.negative { color: var(--danger); }
+  .tx-date { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .user-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-radius: var(--radius-md);
+    background: var(--surface); border: 1px solid var(--border);
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .user-chip:hover { border-color: var(--accent); }
+  .section-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.8px; margin: 20px 0 10px; }
+  .empty-state { text-align: center; padding: 32px 16px; color: var(--text-tertiary); font-size: 14px; }
+  .icon { width: 16px; height: 16px; }
+  .hint { font-size: 12px; color: var(--text-quaternary); text-align: center; margin-top: 14px; }
+
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; }
+  .stat-row:first-child { padding-top: 0; }
+  .stat-row:last-child { padding-bottom: 0; }
+  .stat-label { font-size: 13px; color: var(--text-tertiary); }
+  .stat-value { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+
+  .offline-banner { background: var(--danger); color: #fff; text-align: center; padding: 10px; font-size: 13px; position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: none; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .modal-overlay.active { opacity: 1; pointer-events: auto; }
+  .modal-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 24px; max-width: 380px; width: 90%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    transform: scale(0.95); transition: transform 0.2s;
+  }
+  .modal-overlay.active .modal-card { transform: scale(1); }
+  .modal-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+  .modal-text { font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5; }
+  .modal-actions { display: flex; gap: 10px; }
+  .modal-actions .btn { flex: 1; }
+
+  @media (max-width: 520px) { .app { padding: 14px; } }
+</style>
+</head>
+<body>
+<div class="offline-banner" id="offline-banner">No internet connection. Data may be outdated.</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-title" id="modal-title">Confirm</div>
+    <div class="modal-text" id="modal-text">Are you sure?</div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm-btn" onclick="onModalConfirm()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- LOGIN -->
+  <div id="login-screen" class="screen">
+    <div style="text-align:center;padding:60px 0 40px;">
+      <div style="font-size:26px;font-weight:700;margin-bottom:8px;letter-spacing:-0.5px;">Payroll</div>
+      <div class="label" style="text-transform:none;letter-spacing:0;font-size:14px;">Your personal salary dashboard</div>
+    </div>
+    <div class="card">
+      <div class="label">Username</div>
+      <input id="login-username" class="input" placeholder="e.g. ivan_petrov" autocomplete="off">
+      <div class="error-msg" id="login-error"></div>
+      <button class="btn btn-primary" style="width:100%;margin-top:12px;" onclick="onUsernameSubmit()">Continue</button>
+    </div>
+    <div class="hint">New users will be asked to create a password</div>
+  </div>
+
+  <!-- PASSWORD -->
+  <div id="password-screen" class="screen hidden">
+    <div style="text-align:center;padding:44px 0 32px;">
+      <div style="font-size:22px;font-weight:600;margin-bottom:4px;" id="password-title">Welcome back</div>
+      <div class="label" style="text-transform:none;letter-spacing:0;font-size:14px;" id="password-subtitle">Enter your password</div>
+    </div>
+    <div class="card">
+      <div id="existing-user-form">
+        <div class="label">Password</div>
+        <input id="existing-password" type="password" class="input" placeholder="Your password" autocomplete="off">
+        <div class="error-msg" id="existing-error"></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="onExistingLogin()">Sign in</button>
+      </div>
+      <div id="new-user-form" class="hidden">
+        <div class="label">Create password</div>
+        <input id="new-password" type="password" class="input" placeholder="Min 4 characters" autocomplete="off">
+        <div style="margin-top:12px;"></div>
+        <div class="label">Confirm password</div>
+        <input id="new-password-confirm" type="password" class="input" placeholder="Repeat password" autocomplete="off">
+        <div class="error-msg" id="new-error"></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="onCreateAccount()">Create account</button>
+      </div>
+      <div style="text-align:center;margin-top:16px;">
+        <button class="btn btn-link" onclick="backToLogin()">Use a different username</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="main-screen" class="screen hidden">
+    <div class="header">
+      <div class="user-chip" onclick="openProfile()">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span id="user-name"></span>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:4px;"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <button class="btn" style="padding:8px 14px;font-size:13px;" onclick="doLogout()">Sign out</button>
+    </div>
+
+    <div class="card">
+      <div class="label">Your balance</div>
+      <div class="balance-wrap">
+        <div class="balance" id="balance">0.00</div>
+        <span class="live-badge hidden" id="live-badge"><span class="live-dot"></span>Live</span>
+      </div>
+    </div>
+
+    <div class="card rate-box">
+      <div>
+        <div class="label" style="margin-bottom:2px;">Hourly rate</div>
+        <div class="rate-value" id="hourly-rate">0.00 / hour</div>
+      </div>
+      <div style="margin-left:auto;font-size:13px;color:var(--text-tertiary);" id="rate-status">Inactive</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title" style="margin-top:0;">Statistics</div>
+      <div class="stat-row">
+        <div class="stat-label">Total earned (all time)</div>
+        <div class="stat-value" id="lifetime-earned">0.00</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Transaction history</div>
+      <div class="card" id="tx-list">
+        <div class="empty-state">No transactions yet</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROFILE -->
+  <div id="profile-screen" class="screen hidden">
+    <div class="header">
+      <button class="btn" style="padding:8px 14px;font-size:13px;" onclick="closeProfile()">Back</button>
+      <button class="btn" style="padding:8px 14px;font-size:13px;" onclick="doLogout()">Sign out</button>
+    </div>
+    <div style="text-align:center;padding:20px 0 16px;">
+      <div style="font-size:22px;font-weight:600;" id="profile-name"></div>
+      <div style="font-size:13px;color:var(--text-tertiary);margin-top:4px;">Your account</div>
+    </div>
+    <div class="card">
+      <div class="section-title" style="margin-top:0;">Statistics</div>
+      <div class="stat-row">
+        <div class="stat-label">Current balance</div>
+        <div class="stat-value" id="profile-balance">0.00</div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-label">Total earned</div>
+        <div class="stat-value" id="profile-lifetime">0.00</div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-label">Hourly rate</div>
+        <div class="stat-value" id="profile-rate">0.00 / hour</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title" style="margin-top:0;">Change password</div>
+      <div class="label" style="text-transform:none;letter-spacing:0;">Current password</div>
+      <input id="profile-old-pass" type="password" class="input" placeholder="Current password">
+      <div style="margin-top:12px;"></div>
+      <div class="label" style="text-transform:none;letter-spacing:0;">New password</div>
+      <input id="profile-new-pass" type="password" class="input" placeholder="Min 4 characters">
+      <div style="margin-top:12px;"></div>
+      <div class="label" style="text-transform:none;letter-spacing:0;">Confirm new password</div>
+      <input id="profile-new-pass-confirm" type="password" class="input" placeholder="Repeat new password">
+      <div class="error-msg" id="profile-error"></div>
+      <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="changePassword()">Update password</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDHtCHRG9o1Alpa8qDgezcakfNdQogs-_w",
+  authDomain: "spookytime-a7302.firebaseapp.com",
+  databaseURL: "https://spookytime-a7302-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "spookytime-a7302",
+  storageBucket: "spookytime-a7302.firebasestorage.app",
+  messagingSenderId: "196885981587",
+  appId: "1:196885981587:web:4ebf769c820a740cb32066"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+const LS_SESSION_USER = 'payroll_session_user';
+const LS_SESSION_TIME = 'payroll_session_time';
+const SESSION_MS = 24 * 60 * 60 * 1000;
+let currentUser = null;
+let pendingUsername = null;
+let timerInterval = null;
+let userListener = null;
+let currentData = null;
+let modalCallback = null;
+
+function formatMoney(n) {
+  return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+function getCurrentBalance(data) {
+  if (!data || data.hourlyRate <= 0 || !data.lastRateSetAt) return data ? data.balance : 0;
+  const seconds = (Date.now() - data.lastRateSetAt) / 1000;
+  return data.balance + (data.hourlyRate / 3600) * seconds;
+}
+function formatDate(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString('en-GB') + ' ' + d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+}
+function clearError(id) { document.getElementById(id).textContent = ''; }
+function showError(id, msg) { document.getElementById(id).textContent = msg; }
+function shakeInput(el) {
+  el.classList.add('input-error');
+  setTimeout(() => el.classList.remove('input-error'), 600);
+}
+
+function normalizeData(raw) {
+  if (!raw) return null;
+  const data = { ...raw };
+  if (data.transactions) {
+    if (!Array.isArray(data.transactions)) {
+      const keys = Object.keys(data.transactions).map(Number).sort((a,b)=>a-b);
+      data.transactions = keys.map(k => data.transactions[k]);
+    }
+  } else {
+    data.transactions = [];
+  }
+  data.balance = typeof data.balance === 'number' ? data.balance : 0;
+  data.hourlyRate = typeof data.hourlyRate === 'number' ? data.hourlyRate : 0;
+  data.lifetimeEarned = typeof data.lifetimeEarned === 'number' ? data.lifetimeEarned : 0;
+  data.lastRateSetAt = data.lastRateSetAt || Date.now();
+  return data;
+}
+function prepareForSave(data) {
+  const copy = { ...data };
+  if (Array.isArray(copy.transactions)) {
+    const obj = {};
+    copy.transactions.forEach((tx, i) => obj[i] = tx);
+    copy.transactions = obj;
+  }
+  return copy;
+}
+
+/* ---------- modal ---------- */
+function showModal(title, text, confirmText, onConfirm) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-text').textContent = text;
+  document.getElementById('modal-confirm-btn').textContent = confirmText;
+  modalCallback = onConfirm;
+  document.getElementById('modal-overlay').classList.add('active');
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('active');
+  modalCallback = null;
+}
+function onModalConfirm() {
+  if (modalCallback) modalCallback();
+  closeModal();
+}
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+
+/* ---------- screens ---------- */
+function hideAllScreens() {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('password-screen').classList.add('hidden');
+  document.getElementById('main-screen').classList.add('hidden');
+  document.getElementById('profile-screen').classList.add('hidden');
+}
+function showLogin() {
+  hideAllScreens();
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('login-username').value = '';
+  clearError('login-error');
+  setTimeout(() => document.getElementById('login-username').focus(), 50);
+}
+function showPasswordScreen(username, isNew) {
+  hideAllScreens();
+  pendingUsername = username;
+  document.getElementById('password-screen').classList.remove('hidden');
+  clearError('existing-error');
+  clearError('new-error');
+  if (isNew) {
+    document.getElementById('password-title').textContent = 'Create account';
+    document.getElementById('password-subtitle').textContent = 'Set a password for ' + username;
+    document.getElementById('existing-user-form').classList.add('hidden');
+    document.getElementById('new-user-form').classList.remove('hidden');
+    document.getElementById('new-password').value = '';
+    document.getElementById('new-password-confirm').value = '';
+    setTimeout(() => document.getElementById('new-password').focus(), 50);
+  } else {
+    document.getElementById('password-title').textContent = 'Welcome back';
+    document.getElementById('password-subtitle').textContent = 'Enter your password for ' + username;
+    document.getElementById('existing-user-form').classList.remove('hidden');
+    document.getElementById('new-user-form').classList.add('hidden');
+    document.getElementById('existing-password').value = '';
+    setTimeout(() => document.getElementById('existing-password').focus(), 50);
+  }
+}
+function showMain(username) {
+  hideAllScreens();
+  currentUser = username;
+  document.getElementById('main-screen').classList.remove('hidden');
+  startUserListener(username);
+  startLiveTimer();
+}
+
+function startUserListener(username) {
+  if (userListener) userListener.off();
+  userListener = db.ref('users/' + username);
+  userListener.on('value', snapshot => {
+    currentData = normalizeData(snapshot.val());
+    if (!currentData) { doLogout(); return; }
+    updateUI();
+  }, err => {
+    console.error('Firebase error:', err);
+    showError('login-error', 'Connection error. Please check your internet.');
+  });
+}
+
+/* ---------- auth ---------- */
+window.onUsernameSubmit = function() {
+  const input = document.getElementById('login-username');
+  const raw = input.value.trim();
+  clearError('login-error');
+  if (!raw) { showError('login-error', 'Please enter a username'); shakeInput(input); return; }
+  if (raw.length < 2) { showError('login-error', 'Username must be at least 2 characters'); shakeInput(input); return; }
+
+  db.ref('users/' + raw).once('value')
+    .then(snapshot => showPasswordScreen(raw, !snapshot.exists()))
+    .catch(err => { console.error(err); showError('login-error', 'Network error. Check your connection.'); });
+};
+
+window.onCreateAccount = function() {
+  const pass = document.getElementById('new-password').value;
+  const confirm = document.getElementById('new-password-confirm').value;
+  clearError('new-error');
+  if (!pass) { showError('new-error', 'Please enter a password'); shakeInput(document.getElementById('new-password')); return; }
+  if (pass.length < 4) { showError('new-error', 'Password must be at least 4 characters'); shakeInput(document.getElementById('new-password')); return; }
+  if (pass !== confirm) { showError('new-error', 'Passwords do not match'); shakeInput(document.getElementById('new-password-confirm')); return; }
+
+  const userData = {
+    password: pass,
+    balance: 0,
+    hourlyRate: 0,
+    lifetimeEarned: 0,
+    transactions: {},
+    createdAt: Date.now(),
+    lastRateSetAt: Date.now()
+  };
+
+  db.ref('users/' + pendingUsername).set(userData)
+    .then(() => {
+      localStorage.setItem(LS_SESSION_USER, pendingUsername);
+      localStorage.setItem(LS_SESSION_TIME, Date.now().toString());
+      showMain(pendingUsername);
+    })
+    .catch(err => { console.error(err); showError('new-error', 'Failed to create account. Try again.'); });
+};
+
+window.onExistingLogin = function() {
+  const pass = document.getElementById('existing-password').value;
+  clearError('existing-error');
+  if (!pass) { showError('existing-error', 'Please enter your password'); shakeInput(document.getElementById('existing-password')); return; }
+
+  db.ref('users/' + pendingUsername).once('value')
+    .then(snapshot => {
+      const data = normalizeData(snapshot.val());
+      if (!data) { showError('existing-error', 'Account not found'); return; }
+      if (data.password !== pass) { showError('existing-error', 'Incorrect password'); shakeInput(document.getElementById('existing-password')); return; }
+      localStorage.setItem(LS_SESSION_USER, pendingUsername);
+      localStorage.setItem(LS_SESSION_TIME, Date.now().toString());
+      showMain(pendingUsername);
+    })
+    .catch(err => { console.error(err); showError('existing-error', 'Network error. Try again.'); });
+};
+
+window.backToLogin = function() { pendingUsername = null; showLogin(); };
+window.doLogout = function() {
+  if (userListener) { userListener.off(); userListener = null; }
+  currentUser = null; currentData = null;
+  if (timerInterval) clearInterval(timerInterval);
+  localStorage.removeItem(LS_SESSION_USER);
+  localStorage.removeItem(LS_SESSION_TIME);
+  showLogin();
+};
+
+/* ---------- profile ---------- */
+window.openProfile = function() {
+  if (!currentData || !currentUser) return;
+  hideAllScreens();
+  document.getElementById('profile-screen').classList.remove('hidden');
+  document.getElementById('profile-name').textContent = currentUser;
+  document.getElementById('profile-balance').textContent = formatMoney(getCurrentBalance(currentData));
+  document.getElementById('profile-lifetime').textContent = formatMoney(currentData.lifetimeEarned + (getCurrentBalance(currentData) - currentData.balance));
+  document.getElementById('profile-rate').textContent = formatMoney(currentData.hourlyRate) + ' / hour';
+  document.getElementById('profile-old-pass').value = '';
+  document.getElementById('profile-new-pass').value = '';
+  document.getElementById('profile-new-pass-confirm').value = '';
+  clearError('profile-error');
+};
+window.closeProfile = function() {
+  hideAllScreens();
+  document.getElementById('main-screen').classList.remove('hidden');
+};
+window.changePassword = function() {
+  const oldPass = document.getElementById('profile-old-pass').value;
+  const newPass = document.getElementById('profile-new-pass').value;
+  const confirm = document.getElementById('profile-new-pass-confirm').value;
+  clearError('profile-error');
+
+  if (!oldPass) { showError('profile-error', 'Enter current password'); shakeInput(document.getElementById('profile-old-pass')); return; }
+  if (!newPass || newPass.length < 4) { showError('profile-error', 'New password must be at least 4 characters'); shakeInput(document.getElementById('profile-new-pass')); return; }
+  if (newPass !== confirm) { showError('profile-error', 'Passwords do not match'); shakeInput(document.getElementById('profile-new-pass-confirm')); return; }
+  if (oldPass !== currentData.password) { showError('profile-error', 'Current password is incorrect'); shakeInput(document.getElementById('profile-old-pass')); return; }
+
+  db.ref('users/' + currentUser + '/password').set(newPass)
+    .then(() => {
+      showModal('Success', 'Your password has been updated.', 'OK', () => {});
+      document.getElementById('profile-old-pass').value = '';
+      document.getElementById('profile-new-pass').value = '';
+      document.getElementById('profile-new-pass-confirm').value = '';
+    })
+    .catch(err => { console.error(err); showError('profile-error', 'Failed to update password'); });
+};
+
+/* ---------- UI ---------- */
+function updateUI() {
+  if (!currentData || !currentUser) return;
+  document.getElementById('user-name').textContent = currentUser;
+  updateBalanceDisplay();
+
+  document.getElementById('hourly-rate').textContent = formatMoney(currentData.hourlyRate) + ' / hour';
+  const status = document.getElementById('rate-status');
+  if (currentData.hourlyRate > 0) {
+    status.textContent = 'Active';
+    status.style.color = 'var(--positive)';
+    document.getElementById('live-badge').classList.remove('hidden');
+  } else {
+    status.textContent = 'Inactive';
+    status.style.color = 'var(--text-tertiary)';
+    document.getElementById('live-badge').classList.add('hidden');
+  }
+
+  const liveBal = getCurrentBalance(currentData);
+  const liveEarned = liveBal - currentData.balance;
+  document.getElementById('lifetime-earned').textContent = formatMoney(currentData.lifetimeEarned + liveEarned);
+
+  renderTransactions(currentData.transactions);
+}
+
+function updateBalanceDisplay() {
+  if (!currentData) return;
+  const bal = getCurrentBalance(currentData);
+  const el = document.getElementById('balance');
+  el.textContent = formatMoney(bal);
+  el.classList.remove('sm', 'xs');
+  if (bal >= 1000000000) el.classList.add('xs');
+  else if (bal >= 1000000) el.classList.add('sm');
+}
+
+function renderTransactions(list) {
+  const container = document.getElementById('tx-list');
+  if (!list || list.length === 0) {
+    container.innerHTML = '<div class="empty-state">No transactions yet</div>';
+    return;
+  }
+  container.innerHTML = list.slice().reverse().map(tx => `
+    <div class="tx-row">
+      <div>
+        <div style="font-size:14px;">${tx.desc}</div>
+        <div class="tx-date">${formatDate(tx.date)}</div>
+      </div>
+      <div class="tx-amount ${tx.amount >= 0 ? 'positive' : 'negative'}">
+        ${tx.amount >= 0 ? '+' : ''}${formatMoney(tx.amount)}
+      </div>
+    </div>
+  `).join('');
+}
+
+function startLiveTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(updateBalanceDisplay, 1000);
+}
+
+/* ---------- offline ---------- */
+window.addEventListener('online', () => { document.getElementById('offline-banner').style.display = 'none'; });
+window.addEventListener('offline', () => { document.getElementById('offline-banner').style.display = 'block'; });
+if (!navigator.onLine) document.getElementById('offline-banner').style.display = 'block';
+
+/* ---------- keyboard ---------- */
+document.getElementById('login-username').addEventListener('keydown', e => { if (e.key === 'Enter') onUsernameSubmit(); });
+document.getElementById('existing-password').addEventListener('keydown', e => { if (e.key === 'Enter') onExistingLogin(); });
+document.getElementById('new-password-confirm').addEventListener('keydown', e => { if (e.key === 'Enter') onCreateAccount(); });
+
+/* ---------- init ---------- */
+const sessionUser = localStorage.getItem(LS_SESSION_USER);
+const sessionTime = parseInt(localStorage.getItem(LS_SESSION_TIME) || '0');
+if (sessionUser) {
+  const elapsed = Date.now() - sessionTime;
+  if (elapsed < SESSION_MS) showMain(sessionUser);
+  else showPasswordScreen(sessionUser, false);
+} else {
+  showLogin();
+}
+</script>
+</body>
+</html>
